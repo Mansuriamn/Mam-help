@@ -51,28 +51,65 @@ const updateCache = (data) => {
 };
 
 // Function to fetch jokes from database
-const fetchJokesFromDB = () => {
-  return new Promise((resolve, reject) => {
-    pool.getConnection((err, connection) => {
-      if (err) {
-        console.error('Error getting database connection:', err);
-        reject(new Error('Error connecting to the database'));
-        return;
-      }
+// const fetchJokesFromDB = () => {
+//   return new Promise((resolve, reject) => {
+//     pool.getConnection((err, connection) => {
+//       if (err) {
+//         console.error('Error getting database connection:', err);
+//         reject(new Error('Error connecting to the database'));
+//         return;
+//       }
 
-      connection.query('SELECT * FROM jokes', (error, results) => {
-        connection.release();
+//       connection.query('SELECT * FROM jokes', (error, results) => {
+//         connection.release();
 
-        if (error) {
-          console.error('Error fetching jokes from the database:', error);
-          reject(new Error('Error fetching data from the database'));
-          return;
-        }
+//         if (error) {
+//           console.error('Error fetching jokes from the database:', error);
+//           reject(new Error('Error fetching data from the database'));
+//           return;
+//         }
 
-        resolve(results);
+//         resolve(results);
+//       });
+//     });
+//   });
+// };
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const fetchJokesFromDB = async () => {
+  let retries = 0;
+  while (retries < MAX_RETRIES) {
+    try {
+      return await new Promise((resolve, reject) => {
+        pool.getConnection((err, connection) => {
+          if (err) {
+            console.error('Error getting database connection:', err);
+            reject(new Error('Error connecting to the database'));
+            return;
+          }
+
+          connection.query('SELECT * FROM jokes', (error, results) => {
+            connection.release();
+
+            if (error) {
+              console.error('Error fetching jokes from the database:', error);
+              reject(new Error('Error fetching data from the database'));
+              return;
+            }
+
+            resolve(results);
+          });
+        });
       });
-    });
-  });
+    } catch (error) {
+      retries++;
+      console.error(`Database connection error, retrying (attempt ${retries}/${MAX_RETRIES})...`);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+    }
+  }
+
+  throw new Error('Unable to connect to the database after multiple retries');
 };
 
 // Main route handler for jokes
